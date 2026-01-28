@@ -137,6 +137,8 @@ class Debugger:
     def toggle(self):
         """Toggle debugger active state"""
         self.active = not self.active
+        # Update input handler's debugger_active flag
+        self.atari.inputs.debugger_active = self.active
         if self.active:
             if self._init_display():
                 self._capture_state()
