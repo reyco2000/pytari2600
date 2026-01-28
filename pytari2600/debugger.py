@@ -787,11 +787,13 @@ class Debugger:
         sprite_y = y + 40
         scale = 8  # Large scale for visibility
 
-        # Player 0 - Large graphic display
+        # Player 0 - Large graphic display (use _grp which is actual rendered data)
         px = x + 50
         label = self._font.render("PLAYER 0", True, DebuggerColors.SPRITE_P0)
         self._surface.blit(label, (px, y + 10))
-        self._draw_large_sprite_graphic(px, sprite_y, stella.p0_state.p,
+        # Use _grp (computed graphics) instead of p (raw register)
+        grp0 = stella.p0_state._grp if hasattr(stella.p0_state, '_grp') else stella.p0_state.p
+        self._draw_large_sprite_graphic(px, sprite_y, grp0,
                                         DebuggerColors.SPRITE_P0, scale,
                                         stella.p0_state.refp & 0x8,
                                         stella.p0_state.nusiz)
@@ -800,7 +802,8 @@ class Debugger:
         px = x + 250
         label = self._font.render("PLAYER 1", True, DebuggerColors.SPRITE_P1)
         self._surface.blit(label, (px, y + 10))
-        self._draw_large_sprite_graphic(px, sprite_y, stella.p1_state.p,
+        grp1 = stella.p1_state._grp if hasattr(stella.p1_state, '_grp') else stella.p1_state.p
+        self._draw_large_sprite_graphic(px, sprite_y, grp1,
                                         DebuggerColors.SPRITE_P1, scale,
                                         stella.p1_state.refp & 0x8,
                                         stella.p1_state.nusiz)
@@ -953,8 +956,11 @@ class Debugger:
         self._surface.blit(title, (x + 10, py))
         py += 22
 
+        # Get computed graphics value
+        grp = player._grp if hasattr(player, '_grp') else player.p
+
         info = [
-            f"GRP:  ${player.p:02X} = {player.p:08b}",
+            f"GRP:  ${grp:02X} = {grp:08b}",
             f"RESP: {player.resp:3d}",
             f"NUSIZ: ${player.nusiz:02X}",
             f"REFP: {'Yes' if player.refp & 0x8 else 'No'}",
