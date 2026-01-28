@@ -143,8 +143,8 @@ class Debugger:
             if self._init_display():
                 self._capture_state()
                 print("Debugger activated - Press F12 to close")
-                print("  1: Main view  2: Full Memory  3: Sprites  4: TIA")
-                print("  P: Pause/Resume  D: Dump to file  Up/Down/PgUp/PgDn: Scroll")
+                print("  Tab: Cycle views  P: Pause/Resume  D: Dump to file")
+                print("  Up/Down/PgUp/PgDn: Scroll memory view")
         else:
             self._close_window()
             print("Debugger deactivated")
@@ -169,16 +169,10 @@ class Debugger:
 
     def handle_key(self, key):
         """Handle debugger keyboard input."""
-        if key == pygame.K_1:
-            self.view_mode = self.VIEW_MAIN
+        # Tab cycles through views
+        if key == pygame.K_TAB:
+            self.view_mode = (self.view_mode + 1) % 4
             self.memory_scroll = 0
-        elif key == pygame.K_2:
-            self.view_mode = self.VIEW_MEMORY
-            self.memory_scroll = 0
-        elif key == pygame.K_3:
-            self.view_mode = self.VIEW_SPRITES
-        elif key == pygame.K_4:
-            self.view_mode = self.VIEW_TIA
         elif key == pygame.K_p:
             self.toggle_pause()
         elif key == pygame.K_d:
@@ -357,12 +351,17 @@ class Debugger:
         title_surf = self._font.render(title, True, DebuggerColors.TITLE)
         self._surface.blit(title_surf, (self.PANEL_PADDING, 6))
 
-        # View tabs
-        modes = ["1:Main", "2:Memory", "3:Sprites", "4:TIA"]
+        # View tabs - Tab key cycles through
+        modes = ["Main", "Memory", "Sprites", "TIA"]
         tab_x = 350
         for i, mode in enumerate(modes):
-            color = DebuggerColors.HIGHLIGHT if i == self.view_mode else DebuggerColors.TEXT
-            tab_surf = self._font.render(mode, True, color)
+            if i == self.view_mode:
+                # Highlight current view
+                pygame.draw.rect(self._surface, DebuggerColors.HIGHLIGHT,
+                               (tab_x - 5, 2, len(mode) * 10 + 10, 26), 0, 3)
+                tab_surf = self._font.render(mode, True, DebuggerColors.BACKGROUND)
+            else:
+                tab_surf = self._font.render(mode, True, DebuggerColors.TEXT)
             self._surface.blit(tab_surf, (tab_x, 6))
             tab_x += 100
 
@@ -374,7 +373,7 @@ class Debugger:
         pygame.draw.line(self._surface, DebuggerColors.BORDER,
                         (0, y), (self.WINDOW_WIDTH, y), 1)
 
-        help_text = "1-4:Views  P:Pause  D:Dump  Up/Down/PgUp/PgDn:Scroll  F12:Close"
+        help_text = "Tab:Cycle Views  P:Pause  D:Dump  Up/Down/PgUp/PgDn:Scroll  F12:Close"
         help_surf = self._small_font.render(help_text, True, DebuggerColors.TEXT)
         self._surface.blit(help_surf, (self.PANEL_PADDING, y + 5))
 
@@ -749,32 +748,275 @@ class Debugger:
         self._surface.blit(scroll_surf, (self.WINDOW_WIDTH - 250, 40))
 
     def _draw_sprite_view(self):
-        """Draw detailed sprite view"""
+        """Draw detailed sprite view with graphical representations"""
         stella = self.atari.stella
         y = 45
 
-        # Player 0 panel
-        self._draw_player_panel("PLAYER 0", stella.p0_state, DebuggerColors.SPRITE_P0, 10, y, 485, 180)
-        # Player 1 panel
-        self._draw_player_panel("PLAYER 1", stella.p1_state, DebuggerColors.SPRITE_P1, 505, y, 485, 180)
-        y += 190
+        # Title
+        title = self._font.render("SPRITE GRAPHICS VIEWER", True, DebuggerColors.TITLE)
+        self._surface.blit(title, (10, y))
+        y += 30
 
-        # Missiles panel
-        self._draw_missile_panel_full("MISSILE 0", stella.missile0, DebuggerColors.SPRITE_M0, 10, y, 320, 120)
-        self._draw_missile_panel_full("MISSILE 1", stella.missile1, DebuggerColors.SPRITE_M1, 340, y, 320, 120)
-        # Ball panel
-        self._draw_ball_panel_full("BALL", stella.ball, DebuggerColors.SPRITE_BALL, 670, y, 320, 120)
-        y += 130
+        # Large graphical display of all sprites
+        self._draw_sprite_graphics_panel(10, y, 980, 300, stella)
+        y += 310
 
-        # Playfield panel
-        self._draw_playfield_panel_full(stella.playfield_state, 10, y, 980, 180)
-        y += 190
+        # Sprite info panels in a row
+        # Player 0
+        self._draw_player_info_panel("P0", stella.p0_state, DebuggerColors.SPRITE_P0, 10, y, 240, 150)
+        # Player 1
+        self._draw_player_info_panel("P1", stella.p1_state, DebuggerColors.SPRITE_P1, 260, y, 240, 150)
+        # Missiles & Ball
+        self._draw_missiles_ball_info_panel(stella, 510, y, 240, 150)
+        # Playfield
+        self._draw_playfield_info_panel(stella.playfield_state, 760, y, 230, 150)
+        y += 160
 
         # Full scanline preview
-        title = self._font.render("FULL SCANLINE PREVIEW", True, DebuggerColors.TITLE)
+        title = self._font.render("COMPOSITE SCANLINE (all objects)", True, DebuggerColors.TITLE)
         self._surface.blit(title, (10, y))
-        y += 25
+        y += 20
         self._draw_scanline_preview(10, y, 980)
+
+    def _draw_sprite_graphics_panel(self, x, y, w, h, stella):
+        """Draw large graphical representations of all sprites"""
+        pygame.draw.rect(self._surface, DebuggerColors.PANEL_BG, (x, y, w, h))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, w, h), 1)
+
+        # Calculate positions for sprite displays
+        sprite_y = y + 40
+        scale = 8  # Large scale for visibility
+
+        # Player 0 - Large graphic display
+        px = x + 50
+        label = self._font.render("PLAYER 0", True, DebuggerColors.SPRITE_P0)
+        self._surface.blit(label, (px, y + 10))
+        self._draw_large_sprite_graphic(px, sprite_y, stella.p0_state.p,
+                                        DebuggerColors.SPRITE_P0, scale,
+                                        stella.p0_state.refp & 0x8,
+                                        stella.p0_state.nusiz)
+
+        # Player 1 - Large graphic display
+        px = x + 250
+        label = self._font.render("PLAYER 1", True, DebuggerColors.SPRITE_P1)
+        self._surface.blit(label, (px, y + 10))
+        self._draw_large_sprite_graphic(px, sprite_y, stella.p1_state.p,
+                                        DebuggerColors.SPRITE_P1, scale,
+                                        stella.p1_state.refp & 0x8,
+                                        stella.p1_state.nusiz)
+
+        # Missiles
+        px = x + 450
+        label = self._font.render("MISSILES", True, DebuggerColors.SPRITE_M0)
+        self._surface.blit(label, (px, y + 10))
+        self._draw_missile_graphic(px, sprite_y, stella.missile0, DebuggerColors.SPRITE_M0, "M0")
+        self._draw_missile_graphic(px + 80, sprite_y, stella.missile1, DebuggerColors.SPRITE_M1, "M1")
+
+        # Ball
+        px = x + 650
+        label = self._font.render("BALL", True, DebuggerColors.SPRITE_BALL)
+        self._surface.blit(label, (px, y + 10))
+        self._draw_ball_graphic(px, sprite_y, stella.ball, DebuggerColors.SPRITE_BALL)
+
+        # Playfield pattern (below)
+        pf_y = sprite_y + 120
+        label = self._font.render("PLAYFIELD PATTERN", True, DebuggerColors.SPRITE_PF)
+        self._surface.blit(label, (x + 20, pf_y))
+        pf_y += 25
+        self._draw_playfield_graphic(x + 20, pf_y, stella.playfield_state, 940)
+
+    def _draw_large_sprite_graphic(self, x, y, grp, color, scale, reflect, nusiz):
+        """Draw a large representation of an 8-bit player graphic"""
+        # Draw border/background
+        width = 8 * scale
+        height = 16 * scale  # Make it tall like actual sprites
+        pygame.draw.rect(self._surface, (40, 40, 50), (x, y, width, height))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, width, height), 1)
+
+        # Draw the 8-bit pattern
+        for i in range(8):
+            bit_idx = i if reflect else (7 - i)
+            if (grp >> bit_idx) & 1:
+                pygame.draw.rect(self._surface, color,
+                               (x + i * scale, y, scale - 1, height))
+
+        # Show hex value below
+        hex_text = f"${grp:02X}"
+        hex_surf = self._small_font.render(hex_text, True, color)
+        self._surface.blit(hex_surf, (x, y + height + 5))
+
+        # Show binary pattern
+        bin_text = f"{grp:08b}"
+        bin_surf = self._small_font.render(bin_text, True, DebuggerColors.TEXT)
+        self._surface.blit(bin_surf, (x, y + height + 20))
+
+        # Show NUSIZ info
+        num, size, gap = self._decode_nusiz(nusiz)
+        nusiz_text = f"x{num} sz{size}"
+        nusiz_surf = self._small_font.render(nusiz_text, True, DebuggerColors.TEXT)
+        self._surface.blit(nusiz_surf, (x, y + height + 35))
+
+    def _decode_nusiz(self, nusiz):
+        """Decode NUSIZ register to number, size, gap"""
+        val = nusiz & 0x7
+        if val == 0: return (1, 1, 0)
+        elif val == 1: return (2, 1, 2)
+        elif val == 2: return (2, 1, 4)
+        elif val == 3: return (3, 1, 2)
+        elif val == 4: return (2, 1, 8)
+        elif val == 5: return (1, 2, 0)
+        elif val == 6: return (3, 1, 4)
+        elif val == 7: return (1, 4, 0)
+        return (1, 1, 0)
+
+    def _draw_missile_graphic(self, x, y, missile, color, label):
+        """Draw missile graphic representation"""
+        # Draw label
+        lbl_surf = self._small_font.render(label, True, color)
+        self._surface.blit(lbl_surf, (x, y))
+
+        # Draw missile representation
+        my = y + 20
+        enabled = missile.enam & 0x02
+        width = 1 << ((missile.nusiz & 0x30) >> 4)
+        scale = 8
+
+        # Background
+        pygame.draw.rect(self._surface, (40, 40, 50), (x, my, 60, 80))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, my, 60, 80), 1)
+
+        if enabled:
+            # Draw missile as a vertical bar
+            mw = width * scale
+            pygame.draw.rect(self._surface, color, (x + 20, my + 10, mw, 60))
+
+        # Status text
+        status = "ON" if enabled else "OFF"
+        status_surf = self._small_font.render(status, True,
+                                             DebuggerColors.HIGHLIGHT if enabled else DebuggerColors.FLAG_CLEAR)
+        self._surface.blit(status_surf, (x + 5, my + 65))
+
+    def _draw_ball_graphic(self, x, y, ball, color):
+        """Draw ball graphic representation"""
+        # Draw ball representation
+        enabled = ball.enabl & 0x02
+        width = 1 << ((ball.ctrlpf & 0x30) >> 4)
+        scale = 8
+
+        # Background
+        pygame.draw.rect(self._surface, (40, 40, 50), (x, y, 80, 100))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, 80, 100), 1)
+
+        if enabled:
+            # Draw ball as a square
+            bw = width * scale
+            pygame.draw.rect(self._surface, color, (x + 30 - bw//2, y + 30, bw, bw))
+
+        # Status text
+        status = "ON" if enabled else "OFF"
+        status_surf = self._small_font.render(status, True,
+                                             DebuggerColors.HIGHLIGHT if enabled else DebuggerColors.FLAG_CLEAR)
+        self._surface.blit(status_surf, (x + 5, y + 80))
+
+        # Width info
+        w_text = f"W:{width}px"
+        w_surf = self._small_font.render(w_text, True, DebuggerColors.TEXT)
+        self._surface.blit(w_surf, (x + 40, y + 80))
+
+    def _draw_playfield_graphic(self, x, y, pf, width):
+        """Draw playfield pattern visualization"""
+        pf_scan = pf.get_playfield_scan()
+        scale = width // 160
+
+        # Background
+        pygame.draw.rect(self._surface, (40, 40, 50), (x, y, width, 24))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, width, 24), 1)
+
+        # Draw each pixel
+        for i in range(160):
+            if i < len(pf_scan) and pf_scan[i]:
+                pygame.draw.rect(self._surface, DebuggerColors.SPRITE_PF,
+                               (x + i * scale, y + 2, scale - 1, 20))
+
+        # Show PF register values below
+        pf_text = f"PF0=${pf.pf0:02X}  PF1=${pf.pf1:02X}  PF2=${pf.pf2:02X}  CTRLPF=${pf.ctrlpf:02X}"
+        pf_surf = self._small_font.render(pf_text, True, DebuggerColors.TEXT)
+        self._surface.blit(pf_surf, (x, y + 28))
+
+    def _draw_player_info_panel(self, name, player, color, x, y, w, h):
+        """Draw compact player info panel"""
+        pygame.draw.rect(self._surface, DebuggerColors.PANEL_BG, (x, y, w, h))
+        pygame.draw.rect(self._surface, color, (x, y, w, h), 2)
+
+        py = y + 8
+        title = self._font.render(name, True, color)
+        self._surface.blit(title, (x + 10, py))
+        py += 22
+
+        info = [
+            f"GRP:  ${player.p:02X} = {player.p:08b}",
+            f"RESP: {player.resp:3d}",
+            f"NUSIZ: ${player.nusiz:02X}",
+            f"REFP: {'Yes' if player.refp & 0x8 else 'No'}",
+            f"VDELP: ${player.vdelp:02X}",
+        ]
+
+        for line in info:
+            surf = self._small_font.render(line, True, DebuggerColors.TEXT)
+            self._surface.blit(surf, (x + 10, py))
+            py += 16
+
+    def _draw_missiles_ball_info_panel(self, stella, x, y, w, h):
+        """Draw missiles and ball info panel"""
+        pygame.draw.rect(self._surface, DebuggerColors.PANEL_BG, (x, y, w, h))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, w, h), 1)
+
+        py = y + 8
+        title = self._font.render("M0/M1/BL", True, DebuggerColors.TITLE)
+        self._surface.blit(title, (x + 10, py))
+        py += 22
+
+        m0 = stella.missile0
+        m1 = stella.missile1
+        bl = stella.ball
+
+        info = [
+            f"M0: {'ON' if m0.enam & 0x02 else 'off'} @{m0.resm:3d}",
+            f"M1: {'ON' if m1.enam & 0x02 else 'off'} @{m1.resm:3d}",
+            f"BL: {'ON' if bl.enabl & 0x02 else 'off'} @{bl.resbl:3d}",
+            f"Ball W: {1 << ((bl.ctrlpf & 0x30) >> 4)}px",
+        ]
+
+        colors = [DebuggerColors.SPRITE_M0, DebuggerColors.SPRITE_M1,
+                 DebuggerColors.SPRITE_BALL, DebuggerColors.TEXT]
+
+        for i, line in enumerate(info):
+            surf = self._small_font.render(line, True, colors[i])
+            self._surface.blit(surf, (x + 10, py))
+            py += 18
+
+    def _draw_playfield_info_panel(self, pf, x, y, w, h):
+        """Draw playfield info panel"""
+        pygame.draw.rect(self._surface, DebuggerColors.PANEL_BG, (x, y, w, h))
+        pygame.draw.rect(self._surface, DebuggerColors.SPRITE_PF, (x, y, w, h), 2)
+
+        py = y + 8
+        title = self._font.render("PLAYFIELD", True, DebuggerColors.SPRITE_PF)
+        self._surface.blit(title, (x + 10, py))
+        py += 22
+
+        info = [
+            f"PF0: ${pf.pf0:02X}",
+            f"PF1: ${pf.pf1:02X}",
+            f"PF2: ${pf.pf2:02X}",
+            f"Reflect: {'Yes' if pf.ctrlpf & 0x1 else 'No'}",
+            f"Priority: {'PF' if pf.ctrlpf & 0x4 else 'Spr'}",
+        ]
+
+        for line in info:
+            surf = self._small_font.render(line, True, DebuggerColors.TEXT)
+            self._surface.blit(surf, (x + 10, py))
+            py += 16
 
     def _draw_player_panel(self, title, player, color, x, y, w, h):
         """Draw detailed player panel"""

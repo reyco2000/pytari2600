@@ -89,8 +89,7 @@ class Input(object):
 
             # When debugger is active, redirect certain keys to debugger
             if self.debugger_active:
-                if event.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4,
-                                pygame.K_p, pygame.K_d, pygame.K_TAB,
+                if event.key in (pygame.K_TAB, pygame.K_p, pygame.K_d,
                                 pygame.K_PAGEUP, pygame.K_PAGEDOWN,
                                 pygame.K_HOME, pygame.K_END):
                     self._debugger_key = event.key
