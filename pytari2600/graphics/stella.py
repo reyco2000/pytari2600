@@ -644,6 +644,12 @@ class Stella(object):
         """
         raise Exception("missing implementation ")
 
+    def set_debugger(self, debugger):
+        """ Set debugger reference for rendering overlay.
+            Override in graphics driver subclasses.
+        """
+        pass  # Default no-op for drivers that don't support debugger
+
     def read(self, address):
         self._update_scans()
         self.tiasound.step()
