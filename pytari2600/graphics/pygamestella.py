@@ -35,18 +35,34 @@ class PygameStella(stella.Stella):
         # pygame_cffi, may not have PixelArray
 
         if has_numpy:
-            # Use a faster blit with a numpy array, if available.      
+            # Use a faster blit with a numpy array, if available.
             self.driver_draw_display = self._draw_using_numpy_array
         elif hasattr(pygame, 'PixelArray'):
             self.driver_draw_display = self._draw_using_pixel_array
         else:
             self.driver_draw_display = self._draw_using_set_at
 
+        # Debugger reference (set by atari2600.py)
+        self._debugger = None
+
+    def set_debugger(self, debugger):
+        """Set the debugger reference for rendering overlay"""
+        self._debugger = debugger
+
     def poll_events(self):
-        # Handle events on diplay draw
+        # Handle events on display draw
         for event in pygame.event.get():
-          self.inputs.handle_events(event)
-          self.tiasound.handle_events(event)
+            # When debugger is active, capture arrow keys for debugger navigation
+            if self._debugger and self._debugger.active:
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_UP, pygame.K_DOWN,
+                                    pygame.K_LEFT, pygame.K_RIGHT,
+                                    pygame.K_PAGEUP, pygame.K_PAGEDOWN,
+                                    pygame.K_HOME, pygame.K_END):
+                        self._debugger.handle_key(event.key)
+                        continue  # Don't pass to normal input handler
+            self.inputs.handle_events(event)
+            self.tiasound.handle_events(event)
 
     def driver_open_display(self):
       pygame.init()
@@ -68,6 +84,11 @@ class PygameStella(stella.Stella):
     def driver_update_display(self):
       self._draw_display()
       self._screen.blit(pygame.transform.scale(self._background,(self.BLIT_WIDTH, self.BLIT_HEIGHT)), (0,0))
+
+      # Render debugger overlay if active
+      if self._debugger and self._debugger.active:
+          self._debugger.render(self._screen)
+
       pygame.display.flip()
 
     def _draw_using_numpy_array(self):

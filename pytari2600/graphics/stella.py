@@ -264,6 +264,10 @@ class PlayerState(object):
 
         self._scan_line = [False] * Stella.FRAME_WIDTH
 
+        # Debug: capture all unique non-zero GRP patterns per frame
+        self._debug_grp_history = []
+        self._debug_grp_display = []  # Double-buffer: what the debugger reads
+
         self._pre_calc_player()
 
     def get_save_state(self):
@@ -362,6 +366,14 @@ class PlayerState(object):
             self._grp = self.p
         else:
             self._grp = self.pOld
+
+        # Debug: capture sequential GRP values for sprite reconstruction
+        # Each value represents one scanline row of the sprite shape
+        if len(self._debug_grp_history) < 300:
+            if self._grp != 0:
+                self._debug_grp_history.append(self._grp)
+            elif self._debug_grp_history and self._debug_grp_history[-1] != 0:
+                self._debug_grp_history.append(0)  # Mark sprite boundary
 
         if 0 == self._grp:
             self._scan_line = [False] * 160
@@ -643,6 +655,12 @@ class Stella(object):
             display driver.
         """
         raise Exception("missing implementation ")
+
+    def set_debugger(self, debugger):
+        """ Set debugger reference for rendering overlay.
+            Override in graphics driver subclasses.
+        """
+        pass  # Default no-op for drivers that don't support debugger
 
     def read(self, address):
         self._update_scans()
@@ -985,10 +1003,6 @@ class Stella(object):
 
     def _update_scans(self):
         if self._is_update_time:
-            tmp = time.clock()
-            print(tmp - self._debug_display_time)
-            self._debug_display_time = tmp
-
             self._is_update_time = False
 
             self.driver_update_display()
@@ -1023,6 +1037,11 @@ class Stella(object):
             if self.VSYNC_ON == (data & self.VSYNC_MASK):
                 self._is_update_time = True
                 self._is_vsync = True
+                # Debug: swap GRP history to display buffer before clearing
+                self.p0_state._debug_grp_display = list(self.p0_state._debug_grp_history)
+                self.p1_state._debug_grp_display = list(self.p1_state._debug_grp_history)
+                self.p0_state._debug_grp_history = []
+                self.p1_state._debug_grp_history = []
         else:
             if self.VSYNC_OFF == (data & self.VSYNC_MASK):
                 self._is_vsync = False

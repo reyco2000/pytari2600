@@ -9,9 +9,14 @@ class Input(object):
         self.paddle0 = 0x00
         self.quit = 0x0
 
-        # Custom key inputs. 
+        # Custom key inputs.
         self._save_state = 0
         self._restore_state = 0
+
+        # Debugger state
+        self._debugger_toggle = False
+        self._debugger_key = None  # Last debugger key pressed
+        self.debugger_active = False  # Set by debugger when active
 
     def get_save_state(self):
         state = {}
@@ -20,15 +25,17 @@ class Input(object):
         state['input7']  = self.input7
         state['paddle0'] = self.paddle0
         state['quit']    = self.quit
+        # Note: debugger state is not saved/restored intentionally
         return state
 
     def set_save_state(self, state):
         """ TODO: Get current key state, to avoid need to 'toggle' """
-        self.swcha   = state['swcha']   
-        self.swchb   = state['swchb']   
-        self.input7  = state['input7']  
-        self.paddle0 = state['paddle0'] 
-        self.quit    = state['quit']    
+        self.swcha   = state['swcha']
+        self.swchb   = state['swchb']
+        self.input7  = state['input7']
+        self.paddle0 = state['paddle0']
+        self.quit    = state['quit']
+        # Note: debugger state is not restored intentionally    
 
     def refresh_inputs(self):
         pass
@@ -60,8 +67,47 @@ class Input(object):
     def get_restore_state_key(self):
         return self._restore_state
 
+    # Debugger key events
+    def get_debugger_toggle(self):
+        """Check if debugger toggle was requested (F12 pressed)"""
+        result = self._debugger_toggle
+        self._debugger_toggle = False  # Clear after reading
+        return result
+
+    def get_debugger_key(self):
+        """Get the last debugger key pressed (and clear it)"""
+        key = self._debugger_key
+        self._debugger_key = None
+        return key
+
     def handle_events(self, event):
         if event.type== pygame.KEYDOWN:
+            # Debugger toggle (F12) - always check first
+            if event.key == pygame.K_F12:
+                self._debugger_toggle = True
+                return
+
+            # F11 single step (only when debugger is active)
+            if event.key == pygame.K_F11 and self.debugger_active:
+                self._debugger_key = event.key
+                return
+
+            # When debugger is active, redirect certain keys to debugger
+            if self.debugger_active:
+                if event.key in (pygame.K_TAB, pygame.K_p, pygame.K_d,
+                                pygame.K_PAGEUP, pygame.K_PAGEDOWN,
+                                pygame.K_HOME, pygame.K_END,
+                                pygame.K_LEFT, pygame.K_RIGHT,
+                                pygame.K_RETURN, pygame.K_ESCAPE,
+                                pygame.K_b,
+                                pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3,
+                                pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7,
+                                pygame.K_8, pygame.K_9, pygame.K_a, pygame.K_c,
+                                pygame.K_e, pygame.K_f):
+                    self._debugger_key = event.key
+                    return
+
+            # Normal game input handling
             if event.key   == pygame.K_UP:
                 self.swcha ^= 0x10
             elif event.key == pygame.K_DOWN:
@@ -96,6 +142,7 @@ class Input(object):
                 self._save_state = 0x1
             elif event.key   == pygame.K_RIGHTBRACKET:
                 self._restore_state = 0x1
+
         elif event.type== pygame.KEYUP:
             if event.key   == pygame.K_UP:
                 self.swcha |= 0x10

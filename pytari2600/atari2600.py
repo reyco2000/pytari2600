@@ -3,7 +3,9 @@ from .memory import riot
 from .memory import cartridge
 from . import clocks
 from . import inputs
+from . import debugger
 import json
+import time
 
 class Atari(object):
     def __init__(self, Graphics, audio, cpu):
@@ -16,6 +18,9 @@ class Atari(object):
         self.core     = cpu.core.Core(self.clocks, self.memory, self.pc_state)
 
         self.core.initialise()
+
+        # Initialize debugger (will be connected to stella after power_on)
+        self.debugger = debugger.Debugger(self)
 
     def insert_cartridge(self, cart_name, cart_type):
         if cart_type == 'pb':
@@ -77,6 +82,9 @@ class Atari(object):
         self.memory.set_riot(self.riot)
         self.memory.set_stella(self.stella)
 
+        # Connect debugger to stella for rendering
+        self.stella.set_debugger(self.debugger)
+
         self.core.reset()
 
         step_func = self.core.step
@@ -87,6 +95,7 @@ class Atari(object):
                 while 0 == quit_func():
                     print("clock:%s, %s"%((self.clocks.system_clock - self.stella._vsync_debug_output_clock)/3, str(self.core.pc_state)))
                     step_func()
+                    self._handle_debugger()
             else:
                 with open('debug.json', 'w') as fp:
                     clk = self.clocks
@@ -99,7 +108,12 @@ class Atari(object):
                 state = self.get_save_state()
 
                 while 0 == quit_func():
-                    step_func()
+                    self._handle_debugger()
+                    if not self.debugger.paused:
+                        step_func()
+                    elif self.debugger.consume_step():
+                        step_func()
+                        self.debugger._capture_state()
 
                     # Save/restore state depending on key press.
                     if self.inputs.get_save_state_key():
@@ -114,10 +128,42 @@ class Atari(object):
         else:
             if 0 == stop_clock:
                 while 0 == quit_func():
-                    step_func()
+                    self._handle_debugger()
+                    if not self.debugger.paused:
+                        step_func()
+                    elif self.debugger.consume_step():
+                        step_func()
+                        self.debugger._capture_state()
             else:
                 clk = self.clocks
                 while clk.system_clock < stop_clock:
-                    step_func()
+                    self._handle_debugger()
+                    if not self.debugger.paused:
+                        step_func()
+                    elif self.debugger.consume_step():
+                        step_func()
+                        self.debugger._capture_state()
 
         print("Atari finished")
+
+    def _handle_debugger(self):
+        """Handle debugger input and state updates"""
+        # Check for debugger toggle (F12)
+        if self.inputs.get_debugger_toggle():
+            self.debugger.toggle()
+
+        # Handle debugger key input when active
+        if self.debugger.active:
+            key = self.inputs.get_debugger_key()
+            if key is not None:
+                self.debugger.handle_key(key)
+
+            # Update debugger state
+            self.debugger.step()
+
+            # When paused, manually drive event polling and rendering.
+            # Normally this is driven by TIA writes during CPU execution,
+            # but with the CPU stopped we must do it explicitly.
+            if self.debugger.paused:
+                self.stella.driver_update_display()
+                time.sleep(0.016)  # ~60fps cap to avoid CPU spinning
