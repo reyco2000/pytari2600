@@ -44,6 +44,40 @@ r - Reset
 2 - difficulty
 [ - save state (if -r has been specified)
 ] - restore state (if -r has been specified)
+F12 - Toggle debugger (auto-pauses emulation)
+F11 - Single-step CPU instruction (while paused)
+
+Debugger
+========
+Press F12 during emulation to open the interactive debugger in a separate window.
+The emulator automatically pauses when the debugger opens, and resumes when closed.
+
+Views (press Tab to cycle):
+
+- **Main** - CPU registers (A, X, Y, SP, PC, status flags) with change highlighting, plus a quick RAM view.
+- **Memory** - Full hex dump of RIOT RAM ($0080-$00FF), stack ($0100-$01FF), and ROM with ASCII column.
+- **Sprites** - Graphical display of Player 0/1 sprite shapes reconstructed from GRP writes, plus missile, ball, and playfield state.
+- **TIA** - TIA register values and state.
+- **ROM** - Full ROM viewer/editor with bank switching support.
+
+Debugger keys:
+
+- F12 - Close debugger (resumes emulation)
+- F11 - Execute one CPU instruction (single-step)
+- Tab - Cycle through views
+- P - Toggle pause/resume
+- D - Dump full memory state to file
+- Up/Down - Scroll or move cursor
+- PgUp/PgDn - Scroll by page
+- Home/End - Jump to start/end
+
+ROM editor keys (ROM view only):
+
+- Arrow keys - Navigate cursor
+- Enter - Start editing byte at cursor
+- 0-9, A-F - Enter hex digits (high nibble, then low nibble commits)
+- Escape - Cancel edit
+- B - Cycle through ROM banks
 
 Example startup
 ===============
