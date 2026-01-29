@@ -5,6 +5,7 @@ from . import clocks
 from . import inputs
 from . import debugger
 import json
+import time
 
 class Atari(object):
     def __init__(self, Graphics, audio, cpu):
@@ -159,3 +160,10 @@ class Atari(object):
 
             # Update debugger state
             self.debugger.step()
+
+            # When paused, manually drive event polling and rendering.
+            # Normally this is driven by TIA writes during CPU execution,
+            # but with the CPU stopped we must do it explicitly.
+            if self.debugger.paused:
+                self.stella.driver_update_display()
+                time.sleep(0.016)  # ~60fps cap to avoid CPU spinning
