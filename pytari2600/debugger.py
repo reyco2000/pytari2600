@@ -779,54 +779,93 @@ class Debugger:
         self._draw_scanline_preview(10, y, 980)
 
     def _draw_sprite_graphics_panel(self, x, y, w, h, stella):
-        """Draw large graphical representations of all sprites"""
+        """Draw large graphical representations of all sprites captured this frame"""
         pygame.draw.rect(self._surface, DebuggerColors.PANEL_BG, (x, y, w, h))
         pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, w, h), 1)
 
-        # Calculate positions for sprite displays
-        sprite_y = y + 40
-        scale = 8  # Large scale for visibility
+        scale = 5
+        sprite_h = 8 * scale  # Height of each sprite graphic
 
-        # Player 0 - Large graphic display (use _grp which is actual rendered data)
-        px = x + 50
-        label = self._font.render("PLAYER 0", True, DebuggerColors.SPRITE_P0)
-        self._surface.blit(label, (px, y + 10))
-        # Use _grp (computed graphics) instead of p (raw register)
-        grp0 = stella.p0_state._grp if hasattr(stella.p0_state, '_grp') else stella.p0_state.p
-        self._draw_large_sprite_graphic(px, sprite_y, grp0,
-                                        DebuggerColors.SPRITE_P0, scale,
-                                        stella.p0_state.refp & 0x8,
-                                        stella.p0_state.nusiz)
+        # --- Player 0: show all unique GRP patterns from this frame ---
+        px = x + 15
+        py = y + 10
+        label = self._font.render("PLAYER 0 (frame patterns)", True, DebuggerColors.SPRITE_P0)
+        self._surface.blit(label, (px, py))
+        py += 22
 
-        # Player 1 - Large graphic display
-        px = x + 250
-        label = self._font.render("PLAYER 1", True, DebuggerColors.SPRITE_P1)
-        self._surface.blit(label, (px, y + 10))
-        grp1 = stella.p1_state._grp if hasattr(stella.p1_state, '_grp') else stella.p1_state.p
-        self._draw_large_sprite_graphic(px, sprite_y, grp1,
-                                        DebuggerColors.SPRITE_P1, scale,
-                                        stella.p1_state.refp & 0x8,
-                                        stella.p1_state.nusiz)
+        p0_history = getattr(stella.p0_state, '_debug_grp_history', [])
+        if p0_history:
+            gx = px
+            for grp in p0_history[:10]:  # Show up to 10 patterns
+                self._draw_sprite_tile(gx, py, grp, DebuggerColors.SPRITE_P0, scale,
+                                       stella.p0_state.refp & 0x8)
+                gx += 8 * scale + 12
+                if gx > x + w // 2 - 20:
+                    break
+        else:
+            empty = self._small_font.render("(no sprite data this frame)", True, DebuggerColors.FLAG_CLEAR)
+            self._surface.blit(empty, (px, py))
 
-        # Missiles
-        px = x + 450
+        # --- Player 1: show all unique GRP patterns from this frame ---
+        px = x + w // 2 + 10
+        py = y + 10
+        label = self._font.render("PLAYER 1 (frame patterns)", True, DebuggerColors.SPRITE_P1)
+        self._surface.blit(label, (px, py))
+        py += 22
+
+        p1_history = getattr(stella.p1_state, '_debug_grp_history', [])
+        if p1_history:
+            gx = px
+            for grp in p1_history[:10]:
+                self._draw_sprite_tile(gx, py, grp, DebuggerColors.SPRITE_P1, scale,
+                                       stella.p1_state.refp & 0x8)
+                gx += 8 * scale + 12
+                if gx > x + w - 20:
+                    break
+        else:
+            empty = self._small_font.render("(no sprite data this frame)", True, DebuggerColors.FLAG_CLEAR)
+            self._surface.blit(empty, (px, py))
+
+        # --- Missiles & Ball ---
+        row2_y = y + 40 + sprite_h + 50
+        px = x + 15
         label = self._font.render("MISSILES", True, DebuggerColors.SPRITE_M0)
-        self._surface.blit(label, (px, y + 10))
-        self._draw_missile_graphic(px, sprite_y, stella.missile0, DebuggerColors.SPRITE_M0, "M0")
-        self._draw_missile_graphic(px + 80, sprite_y, stella.missile1, DebuggerColors.SPRITE_M1, "M1")
+        self._surface.blit(label, (px, row2_y))
+        self._draw_missile_graphic(px, row2_y + 20, stella.missile0, DebuggerColors.SPRITE_M0, "M0")
+        self._draw_missile_graphic(px + 80, row2_y + 20, stella.missile1, DebuggerColors.SPRITE_M1, "M1")
 
-        # Ball
-        px = x + 650
+        px = x + 250
         label = self._font.render("BALL", True, DebuggerColors.SPRITE_BALL)
-        self._surface.blit(label, (px, y + 10))
-        self._draw_ball_graphic(px, sprite_y, stella.ball, DebuggerColors.SPRITE_BALL)
+        self._surface.blit(label, (px, row2_y))
+        self._draw_ball_graphic(px, row2_y + 20, stella.ball, DebuggerColors.SPRITE_BALL)
 
-        # Playfield pattern (below)
-        pf_y = sprite_y + 120
+        # --- Playfield pattern ---
+        pf_y = row2_y
+        px = x + 420
         label = self._font.render("PLAYFIELD PATTERN", True, DebuggerColors.SPRITE_PF)
-        self._surface.blit(label, (x + 20, pf_y))
-        pf_y += 25
-        self._draw_playfield_graphic(x + 20, pf_y, stella.playfield_state, 940)
+        self._surface.blit(label, (px, pf_y))
+        pf_y += 22
+        self._draw_playfield_graphic(px, pf_y, stella.playfield_state, w - 430)
+
+    def _draw_sprite_tile(self, x, y, grp, color, scale, reflect):
+        """Draw one 8-bit sprite pattern as a tile with hex label"""
+        width = 8 * scale
+        height = 8 * scale
+
+        # Background
+        pygame.draw.rect(self._surface, (40, 40, 50), (x, y, width, height))
+        pygame.draw.rect(self._surface, DebuggerColors.BORDER, (x, y, width, height), 1)
+
+        # Draw each bit as a pixel block
+        for i in range(8):
+            bit_idx = i if reflect else (7 - i)
+            if (grp >> bit_idx) & 1:
+                pygame.draw.rect(self._surface, color,
+                               (x + i * scale, y, scale - 1, height))
+
+        # Hex label below
+        hex_surf = self._small_font.render(f"${grp:02X}", True, color)
+        self._surface.blit(hex_surf, (x, y + height + 2))
 
     def _draw_large_sprite_graphic(self, x, y, grp, color, scale, reflect, nusiz):
         """Draw a large representation of an 8-bit player graphic"""
@@ -956,11 +995,11 @@ class Debugger:
         self._surface.blit(title, (x + 10, py))
         py += 22
 
-        # Get computed graphics value
-        grp = player._grp if hasattr(player, '_grp') else player.p
+        history = getattr(player, '_debug_grp_history', [])
+        n_patterns = len(history)
 
         info = [
-            f"GRP:  ${grp:02X} = {grp:08b}",
+            f"Patterns: {n_patterns}",
             f"RESP: {player.resp:3d}",
             f"NUSIZ: ${player.nusiz:02X}",
             f"REFP: {'Yes' if player.refp & 0x8 else 'No'}",

@@ -264,6 +264,9 @@ class PlayerState(object):
 
         self._scan_line = [False] * Stella.FRAME_WIDTH
 
+        # Debug: capture all unique non-zero GRP patterns per frame
+        self._debug_grp_history = []
+
         self._pre_calc_player()
 
     def get_save_state(self):
@@ -362,6 +365,10 @@ class PlayerState(object):
             self._grp = self.p
         else:
             self._grp = self.pOld
+
+        # Debug: capture non-zero GRP values for the debugger
+        if self._grp != 0 and self._grp not in self._debug_grp_history:
+            self._debug_grp_history.append(self._grp)
 
         if 0 == self._grp:
             self._scan_line = [False] * 160
@@ -1029,6 +1036,9 @@ class Stella(object):
             if self.VSYNC_ON == (data & self.VSYNC_MASK):
                 self._is_update_time = True
                 self._is_vsync = True
+                # Debug: clear GRP history for new frame
+                self.p0_state._debug_grp_history = []
+                self.p1_state._debug_grp_history = []
         else:
             if self.VSYNC_OFF == (data & self.VSYNC_MASK):
                 self._is_vsync = False
