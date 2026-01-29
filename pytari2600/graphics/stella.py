@@ -367,9 +367,13 @@ class PlayerState(object):
         else:
             self._grp = self.pOld
 
-        # Debug: capture non-zero GRP values for the debugger
-        if self._grp != 0 and self._grp not in self._debug_grp_history:
-            self._debug_grp_history.append(self._grp)
+        # Debug: capture sequential GRP values for sprite reconstruction
+        # Each value represents one scanline row of the sprite shape
+        if len(self._debug_grp_history) < 300:
+            if self._grp != 0:
+                self._debug_grp_history.append(self._grp)
+            elif self._debug_grp_history and self._debug_grp_history[-1] != 0:
+                self._debug_grp_history.append(0)  # Mark sprite boundary
 
         if 0 == self._grp:
             self._scan_line = [False] * 160
