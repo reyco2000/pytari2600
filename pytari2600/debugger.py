@@ -76,6 +76,7 @@ class Debugger:
         self.atari = atari
         self.active = False
         self.paused = False
+        self._step_requested = False
         self.view_mode = self.VIEW_MAIN
 
         # Memory viewer state
@@ -141,18 +142,35 @@ class Debugger:
         self.atari.inputs.debugger_active = self.active
         if self.active:
             if self._init_display():
+                self.paused = True  # Auto-pause when debugger opens
                 self._capture_state()
-                print("Debugger activated - Press F12 to close")
-                print("  Tab: Cycle views  P: Pause/Resume  D: Dump to file")
+                print("Debugger activated - Emulation PAUSED")
+                print("  F11: Step  F12: Close  Tab: Cycle views")
+                print("  P: Pause/Resume  D: Dump to file")
                 print("  Up/Down/PgUp/PgDn: Scroll memory view")
         else:
+            self.paused = False  # Resume when debugger closes
+            self._step_requested = False
             self._close_window()
-            print("Debugger deactivated")
+            print("Debugger deactivated - Emulation RESUMED")
 
     def toggle_pause(self):
         """Toggle emulation pause state"""
         self.paused = not self.paused
+        self._step_requested = False
         print(f"Emulation {'PAUSED' if self.paused else 'RESUMED'}")
+
+    def step_one(self):
+        """Request a single CPU step (used by F11)"""
+        if self.paused:
+            self._step_requested = True
+
+    def consume_step(self):
+        """Check and consume a pending step request. Returns True if a step should execute."""
+        if self._step_requested:
+            self._step_requested = False
+            return True
+        return False
 
     def _capture_state(self):
         """Capture current state for change detection"""
@@ -169,6 +187,10 @@ class Debugger:
 
     def handle_key(self, key):
         """Handle debugger keyboard input."""
+        # F11 single step
+        if key == pygame.K_F11:
+            self.step_one()
+            return
         # Tab cycles through views
         if key == pygame.K_TAB:
             self.view_mode = (self.view_mode + 1) % 4
@@ -373,7 +395,7 @@ class Debugger:
         pygame.draw.line(self._surface, DebuggerColors.BORDER,
                         (0, y), (self.WINDOW_WIDTH, y), 1)
 
-        help_text = "Tab:Cycle Views  P:Pause  D:Dump  Up/Down/PgUp/PgDn:Scroll  F12:Close"
+        help_text = "F11:Step  Tab:Cycle Views  P:Pause/Resume  D:Dump  Arrows:Scroll  F12:Close"
         help_surf = self._small_font.render(help_text, True, DebuggerColors.TEXT)
         self._surface.blit(help_surf, (self.PANEL_PADDING, y + 5))
 

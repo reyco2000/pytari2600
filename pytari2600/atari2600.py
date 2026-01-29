@@ -110,6 +110,9 @@ class Atari(object):
                     self._handle_debugger()
                     if not self.debugger.paused:
                         step_func()
+                    elif self.debugger.consume_step():
+                        step_func()
+                        self.debugger._capture_state()
 
                     # Save/restore state depending on key press.
                     if self.inputs.get_save_state_key():
@@ -127,12 +130,18 @@ class Atari(object):
                     self._handle_debugger()
                     if not self.debugger.paused:
                         step_func()
+                    elif self.debugger.consume_step():
+                        step_func()
+                        self.debugger._capture_state()
             else:
                 clk = self.clocks
                 while clk.system_clock < stop_clock:
                     self._handle_debugger()
                     if not self.debugger.paused:
                         step_func()
+                    elif self.debugger.consume_step():
+                        step_func()
+                        self.debugger._capture_state()
 
         print("Atari finished")
 

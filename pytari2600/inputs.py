@@ -87,6 +87,11 @@ class Input(object):
                 self._debugger_toggle = True
                 return
 
+            # F11 single step (only when debugger is active)
+            if event.key == pygame.K_F11 and self.debugger_active:
+                self._debugger_key = event.key
+                return
+
             # When debugger is active, redirect certain keys to debugger
             if self.debugger_active:
                 if event.key in (pygame.K_TAB, pygame.K_p, pygame.K_d,
