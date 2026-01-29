@@ -266,6 +266,7 @@ class PlayerState(object):
 
         # Debug: capture all unique non-zero GRP patterns per frame
         self._debug_grp_history = []
+        self._debug_grp_display = []  # Double-buffer: what the debugger reads
 
         self._pre_calc_player()
 
@@ -1036,7 +1037,9 @@ class Stella(object):
             if self.VSYNC_ON == (data & self.VSYNC_MASK):
                 self._is_update_time = True
                 self._is_vsync = True
-                # Debug: clear GRP history for new frame
+                # Debug: swap GRP history to display buffer before clearing
+                self.p0_state._debug_grp_display = list(self.p0_state._debug_grp_history)
+                self.p1_state._debug_grp_display = list(self.p1_state._debug_grp_history)
                 self.p0_state._debug_grp_history = []
                 self.p1_state._debug_grp_history = []
         else:

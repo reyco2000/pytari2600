@@ -793,7 +793,7 @@ class Debugger:
         self._surface.blit(label, (px, py))
         py += 22
 
-        p0_history = getattr(stella.p0_state, '_debug_grp_history', [])
+        p0_history = getattr(stella.p0_state, '_debug_grp_display', [])
         if p0_history:
             gx = px
             for grp in p0_history[:10]:  # Show up to 10 patterns
@@ -813,7 +813,7 @@ class Debugger:
         self._surface.blit(label, (px, py))
         py += 22
 
-        p1_history = getattr(stella.p1_state, '_debug_grp_history', [])
+        p1_history = getattr(stella.p1_state, '_debug_grp_display', [])
         if p1_history:
             gx = px
             for grp in p1_history[:10]:
@@ -995,7 +995,7 @@ class Debugger:
         self._surface.blit(title, (x + 10, py))
         py += 22
 
-        history = getattr(player, '_debug_grp_history', [])
+        history = getattr(player, '_debug_grp_display', [])
         n_patterns = len(history)
 
         info = [
