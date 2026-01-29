@@ -1003,7 +1003,7 @@ class Debugger:
             for sprite in p0_sprites:
                 max_h = h - 60  # Leave room for labels
                 # Scale to fit: use smaller scale for tall sprites
-                sprite_scale = min(4, max(1, max_h // max(len(sprite), 1)))
+                sprite_scale = min(2, max(1, max_h // max(len(sprite), 1)))
                 sprite_h = self._draw_sprite_shape(gx, py, sprite, DebuggerColors.SPRITE_P0,
                                                     sprite_scale, reflect_p0)
                 # Hex dump of first few values below sprite
@@ -1038,7 +1038,7 @@ class Debugger:
             gx = px
             for sprite in p1_sprites:
                 max_h = h - 60
-                sprite_scale = min(4, max(1, max_h // max(len(sprite), 1)))
+                sprite_scale = min(2, max(1, max_h // max(len(sprite), 1)))
                 sprite_h = self._draw_sprite_shape(gx, py, sprite, DebuggerColors.SPRITE_P1,
                                                     sprite_scale, reflect_p1)
                 hex_text = " ".join(f"{g:02X}" for g in sprite[:6])

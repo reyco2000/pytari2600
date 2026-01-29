@@ -1003,10 +1003,6 @@ class Stella(object):
 
     def _update_scans(self):
         if self._is_update_time:
-            tmp = time.perf_counter()
-            print(tmp - self._debug_display_time)
-            self._debug_display_time = tmp
-
             self._is_update_time = False
 
             self.driver_update_display()
