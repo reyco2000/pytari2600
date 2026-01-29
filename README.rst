@@ -1,5 +1,5 @@
 # pytari2600
-python based atari 2600 emulator
+python based atari 2600 emulator fork with Debugger
 
 Python atari2600 emulator
 =========================
