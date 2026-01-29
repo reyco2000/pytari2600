@@ -96,7 +96,14 @@ class Input(object):
             if self.debugger_active:
                 if event.key in (pygame.K_TAB, pygame.K_p, pygame.K_d,
                                 pygame.K_PAGEUP, pygame.K_PAGEDOWN,
-                                pygame.K_HOME, pygame.K_END):
+                                pygame.K_HOME, pygame.K_END,
+                                pygame.K_LEFT, pygame.K_RIGHT,
+                                pygame.K_RETURN, pygame.K_ESCAPE,
+                                pygame.K_b,
+                                pygame.K_0, pygame.K_1, pygame.K_2, pygame.K_3,
+                                pygame.K_4, pygame.K_5, pygame.K_6, pygame.K_7,
+                                pygame.K_8, pygame.K_9, pygame.K_a, pygame.K_c,
+                                pygame.K_e, pygame.K_f):
                     self._debugger_key = event.key
                     return
 

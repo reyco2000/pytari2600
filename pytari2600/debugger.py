@@ -71,6 +71,9 @@ class Debugger:
     VIEW_MEMORY = 1    # Full memory dump
     VIEW_SPRITES = 2   # Sprite/TIA graphics
     VIEW_TIA = 3       # TIA registers
+    VIEW_ROM = 4       # ROM viewer/editor
+
+    NUM_VIEWS = 5
 
     def __init__(self, atari):
         """Initialize the debugger."""
@@ -83,6 +86,15 @@ class Debugger:
         # Memory viewer state
         self.memory_scroll = 0
         self.max_scroll = 0
+
+        # ROM viewer/editor state
+        self.rom_scroll = 0
+        self.rom_max_scroll = 0
+        self.rom_bank = 0
+        self.rom_cursor = 0       # Byte offset within current bank
+        self.rom_editing = False   # True when entering hex digits
+        self.rom_edit_nibble = 0   # 0 = high nibble, 1 = low nibble
+        self.rom_edit_value = 0    # Value being edited
 
         # Previous state for change detection
         self._prev_cpu_state = None
@@ -192,14 +204,25 @@ class Debugger:
         if key == pygame.K_F11:
             self.step_one()
             return
+
+        # ROM editor: when editing a byte, capture hex digits and control keys
+        if self.view_mode == self.VIEW_ROM and self.rom_editing:
+            self._handle_rom_edit_key(key)
+            return
+
         # Tab cycles through views
         if key == pygame.K_TAB:
-            self.view_mode = (self.view_mode + 1) % 4
+            self.rom_editing = False
+            self.view_mode = (self.view_mode + 1) % self.NUM_VIEWS
             self.memory_scroll = 0
         elif key == pygame.K_p:
             self.toggle_pause()
         elif key == pygame.K_d:
             self.dump_memory()
+        # ROM view-specific keys
+        elif self.view_mode == self.VIEW_ROM:
+            self._handle_rom_key(key)
+        # Standard scroll keys for other views
         elif key == pygame.K_UP:
             self.memory_scroll = max(0, self.memory_scroll - 1)
         elif key == pygame.K_DOWN:
@@ -212,6 +235,120 @@ class Debugger:
             self.memory_scroll = 0
         elif key == pygame.K_END:
             self.memory_scroll = self.max_scroll
+
+    def _get_rom_banks(self):
+        """Get ROM bank data from cartridge, handling different cartridge types."""
+        cart = self.atari.memory.cartridge
+        if hasattr(cart, 'cartridge_banks'):
+            banks = cart.cartridge_banks
+            num_banks = getattr(cart, 'num_banks', len(banks))
+            current = getattr(cart, 'current_bank', 0)
+            return banks, num_banks, current
+        elif hasattr(cart, 'cartridge_bank'):
+            return [cart.cartridge_bank], 1, 0
+        return [], 0, 0
+
+    def _handle_rom_key(self, key):
+        """Handle keys specific to ROM view (non-editing mode)."""
+        banks, num_banks, _ = self._get_rom_banks()
+        bank_size = len(banks[self.rom_bank]) if banks and self.rom_bank < num_banks else 0
+
+        if key == pygame.K_UP:
+            self.rom_cursor = max(0, self.rom_cursor - 16)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_DOWN:
+            self.rom_cursor = min(max(0, bank_size - 1), self.rom_cursor + 16)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_LEFT:
+            self.rom_cursor = max(0, self.rom_cursor - 1)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_RIGHT:
+            self.rom_cursor = min(max(0, bank_size - 1), self.rom_cursor + 1)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_PAGEUP:
+            self.rom_cursor = max(0, self.rom_cursor - 16 * 20)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_PAGEDOWN:
+            self.rom_cursor = min(max(0, bank_size - 1), self.rom_cursor + 16 * 20)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_HOME:
+            self.rom_cursor = 0
+            self.rom_scroll = 0
+        elif key == pygame.K_END:
+            self.rom_cursor = max(0, bank_size - 1)
+            self._rom_sync_scroll(bank_size)
+        elif key == pygame.K_b:
+            # Cycle through banks
+            if num_banks > 1:
+                self.rom_bank = (self.rom_bank + 1) % num_banks
+                self.rom_cursor = 0
+                self.rom_scroll = 0
+        elif key == pygame.K_RETURN:
+            # Start editing at cursor
+            if banks and self.rom_bank < num_banks and self.rom_cursor < bank_size:
+                self.rom_editing = True
+                self.rom_edit_nibble = 0
+                self.rom_edit_value = banks[self.rom_bank][self.rom_cursor]
+
+    def _rom_sync_scroll(self, bank_size):
+        """Keep scroll position so the cursor is visible."""
+        available_height = self.WINDOW_HEIGHT - 100
+        lines_per_page = available_height // self.LINE_HEIGHT
+        cursor_line = self.rom_cursor // 16
+        total_lines = (bank_size + 15) // 16
+        self.rom_max_scroll = max(0, total_lines - lines_per_page + 2)
+        if cursor_line < self.rom_scroll:
+            self.rom_scroll = cursor_line
+        elif cursor_line >= self.rom_scroll + lines_per_page - 2:
+            self.rom_scroll = cursor_line - lines_per_page + 3
+
+    def _handle_rom_edit_key(self, key):
+        """Handle keys while editing a ROM byte."""
+        hex_keys = {
+            pygame.K_0: 0, pygame.K_1: 1, pygame.K_2: 2, pygame.K_3: 3,
+            pygame.K_4: 4, pygame.K_5: 5, pygame.K_6: 6, pygame.K_7: 7,
+            pygame.K_8: 8, pygame.K_9: 9, pygame.K_a: 10, pygame.K_b: 11,
+            pygame.K_c: 12, pygame.K_d: 13, pygame.K_e: 14, pygame.K_f: 15,
+        }
+
+        if key == pygame.K_ESCAPE:
+            self.rom_editing = False
+            return
+
+        if key in hex_keys:
+            nibble = hex_keys[key]
+            if self.rom_edit_nibble == 0:
+                # High nibble
+                self.rom_edit_value = (nibble << 4) | (self.rom_edit_value & 0x0F)
+                self.rom_edit_nibble = 1
+            else:
+                # Low nibble - commit the edit
+                self.rom_edit_value = (self.rom_edit_value & 0xF0) | nibble
+                self._rom_commit_edit()
+                # Advance cursor to next byte
+                banks, num_banks, _ = self._get_rom_banks()
+                bank_size = len(banks[self.rom_bank]) if banks else 0
+                if self.rom_cursor < bank_size - 1:
+                    self.rom_cursor += 1
+                    self.rom_edit_nibble = 0
+                    self.rom_edit_value = banks[self.rom_bank][self.rom_cursor]
+                    self._rom_sync_scroll(bank_size)
+                else:
+                    self.rom_editing = False
+
+        elif key == pygame.K_RETURN:
+            # Commit current value
+            if self.rom_edit_nibble == 1:
+                self._rom_commit_edit()
+            self.rom_editing = False
+
+    def _rom_commit_edit(self):
+        """Write the edited value back to ROM."""
+        banks, num_banks, _ = self._get_rom_banks()
+        if banks and self.rom_bank < num_banks:
+            bank_data = banks[self.rom_bank]
+            if self.rom_cursor < len(bank_data):
+                bank_data[self.rom_cursor] = self.rom_edit_value & 0xFF
 
     def dump_memory(self):
         """Dump complete memory state to a file"""
@@ -338,6 +475,8 @@ class Debugger:
             self._draw_sprite_view()
         elif self.view_mode == self.VIEW_TIA:
             self._draw_tia_view()
+        elif self.view_mode == self.VIEW_ROM:
+            self._draw_rom_view()
 
         # Draw help bar
         self._draw_help_bar()
@@ -375,7 +514,7 @@ class Debugger:
         self._surface.blit(title_surf, (self.PANEL_PADDING, 6))
 
         # View tabs - Tab key cycles through
-        modes = ["Main", "Memory", "Sprites", "TIA"]
+        modes = ["Main", "Memory", "Sprites", "TIA", "ROM"]
         tab_x = 350
         for i, mode in enumerate(modes):
             if i == self.view_mode:
@@ -396,7 +535,13 @@ class Debugger:
         pygame.draw.line(self._surface, DebuggerColors.BORDER,
                         (0, y), (self.WINDOW_WIDTH, y), 1)
 
-        help_text = "F11:Step  Tab:Cycle Views  P:Pause/Resume  D:Dump  Arrows:Scroll  F12:Close"
+        if self.view_mode == self.VIEW_ROM:
+            if self.rom_editing:
+                help_text = "ROM EDIT: 0-F:Hex Input  Enter:Commit  Esc:Cancel"
+            else:
+                help_text = "Arrows:Navigate  Enter:Edit Byte  B:Change Bank  F11:Step  Tab:Views  F12:Close"
+        else:
+            help_text = "F11:Step  Tab:Cycle Views  P:Pause/Resume  D:Dump  Arrows:Scroll  F12:Close"
         help_surf = self._small_font.render(help_text, True, DebuggerColors.TEXT)
         self._surface.blit(help_surf, (self.PANEL_PADDING, y + 5))
 
@@ -1218,6 +1363,137 @@ class Debugger:
             if i < len(pf_scan) and pf_scan[i]:
                 pygame.draw.rect(self._surface, DebuggerColors.SPRITE_PF,
                                (x + 15 + i * scale, py, scale - 1, 16))
+
+    def _draw_rom_view(self):
+        """Draw ROM viewer/editor with bank selection and hex editing"""
+        banks, num_banks, active_bank = self._get_rom_banks()
+
+        if not banks or num_banks == 0:
+            msg = self._font.render("No ROM cartridge loaded", True, DebuggerColors.CHANGED)
+            self._surface.blit(msg, (10, 60))
+            return
+
+        # Clamp rom_bank
+        if self.rom_bank >= num_banks:
+            self.rom_bank = 0
+
+        bank_data = banks[self.rom_bank]
+        bank_size = len(bank_data)
+
+        y = 40
+
+        # Header: bank info
+        bank_info = f"ROM VIEWER - Bank {self.rom_bank}/{num_banks}"
+        if num_banks > 1:
+            bank_info += f"  (Active: {active_bank})"
+        bank_info += f"  [{bank_size} bytes]"
+        title_surf = self._font.render(bank_info, True, DebuggerColors.TITLE)
+        self._surface.blit(title_surf, (10, y))
+
+        if self.rom_editing:
+            edit_label = self._font.render("[EDITING]", True, DebuggerColors.CHANGED)
+            self._surface.blit(edit_label, (self.WINDOW_WIDTH - 120, y))
+
+        y += 22
+
+        # Column header
+        header = "Address   " + " ".join(f"{i:02X}" for i in range(16)) + "   ASCII"
+        header_surf = self._small_font.render(header, True, DebuggerColors.ADDRESS)
+        self._surface.blit(header_surf, (10, y))
+        y += 18
+
+        # Calculate visible area
+        available_height = self.WINDOW_HEIGHT - y - 30
+        lines_per_page = available_height // self.LINE_HEIGHT
+        total_lines = (bank_size + 15) // 16
+        self.rom_max_scroll = max(0, total_lines - lines_per_page + 1)
+        self.rom_scroll = max(0, min(self.rom_scroll, self.rom_max_scroll))
+
+        cursor_line = self.rom_cursor // 16
+        cursor_col = self.rom_cursor % 16
+
+        # Draw visible ROM lines
+        for line_idx in range(lines_per_page):
+            data_line = self.rom_scroll + line_idx
+            offset = data_line * 16
+            if offset >= bank_size:
+                break
+
+            addr = 0x1000 + offset
+            is_cursor_line = (data_line == cursor_line)
+
+            # Highlight cursor row background
+            if is_cursor_line:
+                pygame.draw.rect(self._surface, (40, 40, 60),
+                               (0, y, self.WINDOW_WIDTH, self.LINE_HEIGHT))
+
+            # Address
+            addr_color = DebuggerColors.HIGHLIGHT if is_cursor_line else DebuggerColors.ADDRESS
+            addr_surf = self._small_font.render(f"${addr:04X}:", True, addr_color)
+            self._surface.blit(addr_surf, (10, y))
+
+            # Hex values
+            hx = 70
+            end = min(offset + 16, bank_size)
+            ascii_chars = []
+            for col in range(16):
+                byte_offset = offset + col
+                if byte_offset >= bank_size:
+                    break
+
+                val = bank_data[byte_offset]
+                ascii_chars.append(chr(val) if 32 <= val < 127 else '.')
+
+                is_cursor = is_cursor_line and (col == cursor_col)
+
+                if is_cursor and self.rom_editing:
+                    # Draw editing highlight
+                    pygame.draw.rect(self._surface, DebuggerColors.CHANGED,
+                                   (hx - 1, y - 1, 20, self.LINE_HEIGHT), 0, 2)
+                    # Show the value being edited
+                    edit_text = f"{self.rom_edit_value:02X}"
+                    if self.rom_edit_nibble == 0:
+                        # Both nibbles pending - show current value
+                        edit_surf = self._small_font.render(edit_text, True, (0, 0, 0))
+                    else:
+                        # High nibble entered, low pending
+                        hi = f"{self.rom_edit_value >> 4:X}"
+                        lo = "_"
+                        edit_text = hi + lo
+                        edit_surf = self._small_font.render(edit_text, True, (0, 0, 0))
+                    self._surface.blit(edit_surf, (hx, y))
+                elif is_cursor:
+                    # Cursor highlight (not editing)
+                    pygame.draw.rect(self._surface, DebuggerColors.HIGHLIGHT,
+                                   (hx - 1, y - 1, 20, self.LINE_HEIGHT), 0, 2)
+                    hex_surf = self._small_font.render(f"{val:02X}", True, (0, 0, 0))
+                    self._surface.blit(hex_surf, (hx, y))
+                else:
+                    # PC highlight
+                    pc = self.atari.pc_state.PC
+                    pc_offset = pc - 0x1000
+                    color = DebuggerColors.VALUE
+                    if byte_offset == pc_offset:
+                        color = DebuggerColors.REGISTER_NAME
+                    hex_surf = self._small_font.render(f"{val:02X}", True, color)
+                    self._surface.blit(hex_surf, (hx, y))
+
+                hx += 21
+
+            # ASCII column
+            ascii_str = ''.join(ascii_chars)
+            ascii_surf = self._small_font.render(f"  {ascii_str}", True, DebuggerColors.TEXT)
+            self._surface.blit(ascii_surf, (hx, y))
+
+            y += self.LINE_HEIGHT
+
+        # Scroll/position indicator
+        pct = (self.rom_scroll / max(1, self.rom_max_scroll)) * 100 if self.rom_max_scroll > 0 else 0
+        cursor_addr = 0x1000 + self.rom_cursor
+        info_text = f"Cursor: ${cursor_addr:04X} = ${bank_data[self.rom_cursor]:02X}  "
+        info_text += f"Line {self.rom_scroll+1}-{min(self.rom_scroll+lines_per_page, total_lines)} of {total_lines}  ({pct:.0f}%)"
+        info_surf = self._small_font.render(info_text, True, DebuggerColors.TEXT)
+        self._surface.blit(info_surf, (self.WINDOW_WIDTH - 500, 40))
 
     def _draw_tia_view(self):
         """Draw TIA registers view"""

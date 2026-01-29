@@ -56,6 +56,7 @@ class PygameStella(stella.Stella):
             if self._debugger and self._debugger.active:
                 if event.type == pygame.KEYDOWN:
                     if event.key in (pygame.K_UP, pygame.K_DOWN,
+                                    pygame.K_LEFT, pygame.K_RIGHT,
                                     pygame.K_PAGEUP, pygame.K_PAGEDOWN,
                                     pygame.K_HOME, pygame.K_END):
                         self._debugger.handle_key(event.key)
