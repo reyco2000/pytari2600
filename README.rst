@@ -1,7 +1,7 @@
 # pytari2600
 python based atari 2600 emulator fork with Debugger and Sound Fixed!
 
-Python atari2600 emulator
+Python Atari 2600 emulator
 =========================
 |license| |build| |coverage|
 
@@ -15,6 +15,9 @@ The emulator is written based on information from the following documents:
 
   Atari 2600 TIA Schematics (primarily used for the audio module).
   http://www.atariage.com/2600/archives/schematics_tia/index.html
+
+  Sound:
+  Fixed based on https://github.com/stella-emu/stella 
 
 Module dependencies:
    pygame (1.9.1)
@@ -103,13 +106,7 @@ Generally setting 'FUTURE_PIXELS' between 1-9 will be fairly stable for a partic
 
 TODO:
     - Speed improvements: On my machine, python + pygame runs ~ 1/3 of real-time
-    - Audio with python. There are large delays in they way I'm handling audio,
-      larger buffers lead to larger delay, smaller buffers drain and drop out.
-    - Audio with 'pypy'.  pypy + Pygame appears to deal with sound buffers
-      differently, so audio is choppy/broken
-    - Audio general.  I'd like to switch to a callback for audio, so the buffer
-      can be filled when it's close to empty, rather pre-filling buffers to try to keep them full.
-    - Cartridge auto detection (I'd like to determine the style of cartridge by
+   - Cartridge auto detection (I'd like to determine the style of cartridge by
       it's contents, ie detect the bank switching mechanism and RAM)
     - More undocumented opcoded (I've generally added op-codes as I encounter them).
     - Pick another name, 'pytari' appears to be used for another python atari
